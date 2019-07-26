@@ -27,7 +27,7 @@ export type TestTaskDesc = {
 
 export type LintTaskDesc = {
   name: 'lint';
-  config: string;
+  config?: string;
 } & TaskDesc;
 
 export type CommitTaskDesc = {
@@ -48,7 +48,7 @@ export type PrecommitTaskDesc = {
   name: 'precommit';
   fix: boolean;
   tests: boolean;
-  eslintConfig: string;
+  eslintConfig?: string;
   jestConfig: string;
   prettierConfig: string;
 } & TaskDesc;

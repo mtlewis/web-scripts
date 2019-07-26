@@ -1,5 +1,7 @@
 import program, { Command } from 'commander';
 import { SpawnSyncReturns } from 'child_process';
+import { resolve } from 'path';
+import glob from 'glob';
 
 import {
   TestTaskDesc,
@@ -11,6 +13,7 @@ import {
   PrecommitTaskDesc,
 } from './SharedTypes';
 import {
+  CONSUMING_ROOT,
   JEST_CONFIG,
   COMMITLINT_CONIFG,
   PRETTIER_CONFIG,
@@ -32,6 +35,11 @@ program
   .action(() => {
     throw new Error('unimplemented');
   });
+
+const pkg: { [key: string]: any } = require(resolve(
+  CONSUMING_ROOT,
+  'package.json',
+));
 
 program
   .command('build')
@@ -70,17 +78,47 @@ program
     handleSpawnResult(result);
   });
 
+const hasConfig = (
+  sources: (
+    | { type: 'file'; pattern: string }
+    | { type: 'package.json'; property: string })[],
+): boolean =>
+  sources.some(source => {
+    if (source.type === 'file') {
+      return !!glob.sync(source.pattern).length;
+    } else if (source.type === 'package.json') {
+      return !!pkg[source.property];
+    }
+
+    return false;
+  });
+
+const resolveEslintConfig = (configArgument?: string): string | undefined => {
+  if (configArgument) {
+    return configArgument;
+  } else if (
+    !hasConfig([
+      { type: 'file', pattern: '.eslintrc.*' },
+      { type: 'package.json', property: 'eslint' },
+    ])
+  ) {
+    return ESLINT_CONFIG;
+  }
+
+  return undefined;
+};
+
 program
   .command('lint')
   .allowUnknownOption()
   .description('Run eslint')
-  .option('--config [path]', 'path to ESLint config', ESLINT_CONFIG)
+  .option('--config [path]', 'path to ESLint config')
   .action((cmd: Command) => {
-    const { config } = cmd.opts();
+    const { config: configArgument } = cmd.opts();
     const t: LintTaskDesc = {
       name: 'lint',
-      config,
       restOptions: parseRestOptions(cmd),
+      config: resolveEslintConfig(configArgument),
     };
 
     handleSpawnResult(lintTask(t));
@@ -96,7 +134,7 @@ program
     'path to prettier config',
     PRETTIER_CONFIG,
   )
-  .option('--eslint-config [path]', 'path to eslint config', ESLINT_CONFIG)
+  .option('--eslint-config [path]', 'path to eslint config')
   .option('--no-fix', 'Do not auto-fix any static analysis errors')
   .option('--no-tests', 'Do not run Jest tests')
   .action((cmd: Command) => {
@@ -112,7 +150,7 @@ program
       fix,
       tests,
       jestConfig,
-      eslintConfig,
+      eslintConfig: resolveEslintConfig(eslintConfig),
       prettierConfig,
       restOptions: parseRestOptions(cmd),
     };
